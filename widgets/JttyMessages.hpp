@@ -390,6 +390,26 @@ namespace Jtty
     return call.size () - area - 1 <= 3;
   }
 
+  // Compound calls cannot use Call8, but can be sent intact as JTTY text.
+  // Require a standard base call and nonempty alphanumeric slash components.
+  inline bool isMacroCall (QString const& rawCall)
+  {
+    QString const call = normalizedNativeCall (rawCall);
+    if (isNativeCall (call)) return true;
+    QStringList const parts = call.split (QLatin1Char {'/'});
+    if (parts.size () < 2) return false;
+    bool hasBaseCall {false};
+    for (QString const& part : parts) {
+      if (part.isEmpty ()) return false;
+      for (QChar c : part) {
+        if (!((c >= QLatin1Char {'A'} && c <= QLatin1Char {'Z'})
+              || (c >= QLatin1Char {'0'} && c <= QLatin1Char {'9'}))) return false;
+      }
+      hasBaseCall = hasBaseCall || isNativeCall (part);
+    }
+    return hasBaseCall;
+  }
+
   inline NativeAtomDescriptor nativeCallAtom (CallAction action, QString const& rawCall)
   {
     NativeAtomDescriptor atom;
@@ -673,8 +693,13 @@ namespace Jtty
       result.error = error;
       return result;
     };
-    auto appendCall = [&result] (CallAction action, QString const& call) {
-      result.atoms.append (nativeCallAtom (action, call));
+    bool requiresText {false};
+    auto appendCall = [&result, &requiresText] (CallAction action, QString const& call) {
+      if (isNativeCall (call)) {
+        result.atoms.append (nativeCallAtom (action, call));
+      } else {
+        requiresText = true;
+      }
     };
     auto appendSerial = [&result, &context] {
       result.atoms.append (nativeSerialAtom (context.serialNumber));
@@ -694,12 +719,12 @@ namespace Jtty
 
     switch (functionKey) {
     case 1:
-      if (!isNativeCall (myCall)) return invalid (QStringLiteral ("Configured callsign is not a native Call8 callsign"));
+      if (!isMacroCall (myCall)) return invalid (QStringLiteral ("Configured callsign is not a valid JTTY callsign"));
       appendCall (CallAction::Cq, myCall);
       result.text = QStringLiteral ("CQ %1 CQ").arg (myCall);
       break;
     case 2:
-      if (!isNativeCall (hisCall)) return invalid (QStringLiteral ("DX callsign is not a native Call8 callsign"));
+      if (!isMacroCall (hisCall)) return invalid (QStringLiteral ("DX callsign is not a valid JTTY callsign"));
       appendCall (CallAction::Call, hisCall);
       if (macroTemplate == legacyNativeMacroTemplate (2)) {
         if (context.serialNumber < 0 || context.serialNumber >= (1 << 17)) {
@@ -715,24 +740,24 @@ namespace Jtty
       }
       break;
     case 3:
-      if (!isNativeCall (hisCall)) return invalid (QStringLiteral ("DX callsign is not a native Call8 callsign"));
-      if (!isNativeCall (myCall)) return invalid (QStringLiteral ("Configured callsign is not a native Call8 callsign"));
+      if (!isMacroCall (hisCall)) return invalid (QStringLiteral ("DX callsign is not a valid JTTY callsign"));
+      if (!isMacroCall (myCall)) return invalid (QStringLiteral ("Configured callsign is not a valid JTTY callsign"));
       appendCall (CallAction::CallTu, hisCall);
       appendCall (CallAction::Cq, myCall);
       result.text = QStringLiteral ("%1 TU CQ %2 CQ").arg (hisCall, myCall);
       break;
     case 4:
-      if (!isNativeCall (myCall)) return invalid (QStringLiteral ("Configured callsign is not a native Call8 callsign"));
+      if (!isMacroCall (myCall)) return invalid (QStringLiteral ("Configured callsign is not a valid JTTY callsign"));
       appendCall (CallAction::Call, myCall);
       result.text = myCall;
       break;
     case 5:
-      if (!isNativeCall (hisCall)) return invalid (QStringLiteral ("DX callsign is not a native Call8 callsign"));
+      if (!isMacroCall (hisCall)) return invalid (QStringLiteral ("DX callsign is not a valid JTTY callsign"));
       appendCall (CallAction::Call, hisCall);
       result.text = hisCall;
       break;
     case 6:
-      if (!isNativeCall (hisCall)) return invalid (QStringLiteral ("Queued callsign is not a native Call8 callsign"));
+      if (!isMacroCall (hisCall)) return invalid (QStringLiteral ("Queued callsign is not a valid JTTY callsign"));
       appendCall (CallAction::TuNowCall, hisCall);
       if (macroTemplate == legacyNativeMacroTemplate (6)) {
         if (context.serialNumber < 0 || context.serialNumber >= (1 << 17)) {
@@ -748,7 +773,7 @@ namespace Jtty
       }
       break;
     case 7:
-      if (!isNativeCall (hisCall)) return invalid (QStringLiteral ("DX callsign is not a native Call8 callsign"));
+      if (!isMacroCall (hisCall)) return invalid (QStringLiteral ("DX callsign is not a valid JTTY callsign"));
       appendCall (CallAction::CallAgn, hisCall);
       result.text = QStringLiteral ("%1 AGN?").arg (hisCall);
       break;
@@ -769,7 +794,14 @@ namespace Jtty
       return invalid (QStringLiteral ("Unsupported native macro"));
     }
 
-    result.status = NativeMacroStatus::Native;
+    // Validate exchanges first, then use the canonical rendered message for
+    // compound calls. Never discard the prefix or transmit partial atoms.
+    if (requiresText) {
+      result.atoms.clear ();
+      result.status = NativeMacroStatus::LiteralFallback;
+    } else {
+      result.status = NativeMacroStatus::Native;
+    }
     return result;
   }
 

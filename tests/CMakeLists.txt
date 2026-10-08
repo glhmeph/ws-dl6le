@@ -35,3 +35,9 @@ add_test (test_tx_inhibit_gate test_tx_inhibit_gate)
 
 add_executable (test_auto_cq_state test_auto_cq_state.cpp)
 add_test (test_auto_cq_state test_auto_cq_state)
+
+add_executable (test_jtty_macros test_jtty_macros.cpp jtty_macro_roundtrip.f90)
+target_include_directories (test_jtty_macros PRIVATE ${CMAKE_BINARY_DIR})
+set_target_properties (test_jtty_macros PROPERTIES CXX_STANDARD 17)
+target_link_libraries (test_jtty_macros wsjt_fort wsjt_cxx Qt5::Core)
+add_test (test_jtty_macros test_jtty_macros)
