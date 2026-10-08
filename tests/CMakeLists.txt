@@ -32,3 +32,6 @@ add_test (test_tx_inhibit_logic test_tx_inhibit_logic)
 add_executable (test_tx_inhibit_gate test_tx_inhibit_gate.cpp ${CMAKE_SOURCE_DIR}/Logger.cpp)
 target_link_libraries (test_tx_inhibit_gate wsjt_qt Boost::log_setup Qt5::Test Qt5::Network)
 add_test (test_tx_inhibit_gate test_tx_inhibit_gate)
+
+add_executable (test_auto_cq_state test_auto_cq_state.cpp)
+add_test (test_auto_cq_state test_auto_cq_state)

@@ -999,6 +999,15 @@ MainWindow::MainWindow(QDir const& temp_directory, bool multiple,
   connect (ui->sbTxPercent, static_cast<void (QSpinBox::*) (int)> (&QSpinBox::valueChanged)
            , &m_WSPR_band_hopping, &WSPRBandHopping::set_tx_percent);
 
+  connect (ui->cbAutoCQ, &QCheckBox::toggled, this, [this] (bool checked) {
+    if (checked) {
+      ui->cbAutoSeq->setChecked (true);
+      ui->respondComboBox->setCurrentIndex (1); // CQ: First
+    } else if (m_autoCQ.pending ()) {
+      auto_tx_mode (false);
+    }
+  });
+
   on_EraseButton_clicked ();
 
   QActionGroup* modeGroup = new QActionGroup(this);
@@ -1847,6 +1856,7 @@ void MainWindow::writeSettings()
   m_settings->setValue("DTtol",m_DTtol);
   m_settings->setValue("MinSync",m_minSync);
   m_settings->setValue ("AutoSeq", ui->cbAutoSeq->isChecked ());
+  m_settings->setValue ("AutoCQ", ui->cbAutoCQ->isChecked ());
   m_settings->setValue ("AutoSeqJT65",m_autoSeqJT65);
   m_settings->setValue ("RxAll", ui->cbRxAll->isChecked ());
 // m_settings->setValue("ShMsgs",m_bShMsgs);
@@ -2231,6 +2241,11 @@ void MainWindow::readSettings()
   m_minSync=m_settings->value("MinSync",0).toInt();
   ui->syncSpinBox->setValue(m_minSync);
   ui->cbAutoSeq->setChecked (m_settings->value ("AutoSeq", false).toBool());
+  ui->cbAutoCQ->setChecked (m_settings->value ("AutoCQ", false).toBool());
+  if (ui->cbAutoCQ->isChecked ()) {
+    ui->cbAutoSeq->setChecked (true);
+    ui->respondComboBox->setCurrentIndex (1);
+  }
   m_autoSeqJT65=m_settings->value ("AutoSeqJT65", true).toBool();
   ui->cbRxAll->setChecked (m_settings->value ("RxAll", false).toBool());
 // m_bShMsgs=m_settings->value("ShMsgs",false).toBool();
@@ -3454,7 +3469,7 @@ void MainWindow::fastSink(qint64 frames)
 
     // CQ: First for MSK144
     if(((pounce && text.contains(" CQ ") && m_config.Wait_features_enabled())
-        or (m_auto && m_bCallingCQ && text.contains(" " + m_config.my_callsign() + " "))) && !ignored
+        or (!m_autoCQ.pending () && m_auto && m_bCallingCQ && text.contains(" " + m_config.my_callsign() + " "))) && !ignored
         && !filtered && !selected && ui->respondComboBox->isVisible() && ui->respondComboBox->currentText()=="CQ: First"
         && (!(ui->actionFull_Duplex_Mode->isChecked() && m_txing))) {
                   m_bDoubleClicked=true;
@@ -4185,6 +4200,12 @@ void MainWindow::on_actionAbout_triggered()                  //Display "About"
 
 void MainWindow::on_autoButton_clicked (bool checked)
 {
+  if (!checked) m_autoCQ.cancel ();
+  if (checked && ui->cbAutoCQ->isChecked () && (m_mode=="FT8" || m_mode=="FT4")
+      && m_config.special_op_id () == SpecOp::NONE) {
+    ui->cbAutoSeq->setChecked (true);
+    ui->respondComboBox->setCurrentIndex (1);
+  }
   if (ui->DX_Call_Button->isChecked() && m_specOp==SpecOp::HOUND && m_config.superFox() && !m_bDoubleClicked) return;  // for Wait & Call
   m_config.transceiver_tune (false);  // reset rig tuning
   if (checked && ui->tuneButton->isChecked() && !(m_mode=="WSPR" || m_mode=="FST4W")) return; // not allowed while tuning
@@ -5050,6 +5071,8 @@ void MainWindow::closeEvent(QCloseEvent * e)
 
 void MainWindow::on_stopButton_clicked()                       //stopButton
 {
+  if (m_autoCQ.pending ()) auto_tx_mode (false);
+  m_autoCQ.cancel ();
   ui->pbBandHopping->setChecked(false); // disable band hopping
   monitor (false);
   if(m_mode=="JTTY" and m_saveAll and !m_diskData) {
@@ -7715,7 +7738,7 @@ void MainWindow::readFromStdout()                             //readFromStdout
 
         // CQ: First
         if(((pounce && text.contains(" CQ ") && m_config.Wait_features_enabled())
-              or (m_auto && m_bCallingCQ && text.contains(" " + m_config.my_callsign() + " "))) && !ignored
+              or (!m_autoCQ.pending () && m_auto && m_bCallingCQ && text.contains(" " + m_config.my_callsign() + " "))) && !ignored
             && !filtered && !selected && ui->respondComboBox->isVisible() && ui->respondComboBox->currentText()=="CQ: First"
             && (!(ui->actionFull_Duplex_Mode->isChecked() && m_txing))) {
           m_bDoubleClicked=true;
@@ -8208,6 +8231,7 @@ void MainWindow::readFromStdout()                             //readFromStdout
 //
 void MainWindow::auto_sequence (DecodedText const& message, unsigned start_tolerance, unsigned stop_tolerance)
 {
+  if (m_autoCQ.pending ()) return; // Finish/log this QSO before accepting another decode.
   auto const& message_words = message.messageWords ();
   auto is_73 = message_words.filter (QRegularExpression {"^(73|RR73)$"}).size();
   auto msg_no_hash = message.clean_string();
@@ -8723,6 +8747,9 @@ void MainWindow::decodeBusy(bool b)                             //decodeBusy()
 //------------------------------------------------------------- //guiUpdate()
 void MainWindow::guiUpdate()
 {
+  ui->cbAutoCQ->setEnabled ((m_mode=="FT8" || m_mode=="FT4")
+                           && m_config.special_op_id () == SpecOp::NONE);
+  tryResumeCQ ();
   static char message[38];
   static char msgsent[38];
   double txDuration;
@@ -8865,7 +8892,7 @@ void MainWindow::guiUpdate()
     int msgLength=txMsg.trimmed().length();
     if(msgLength==0 and !m_tune and m_mode!="JTTY") on_stopTxButton_clicked();
 
-    if(g_iptt==0 and ((m_bTxTime and (fTR < 0.75) and (msgLength>0)) or m_tune or m_mode=="JTTY")) {
+    if(!m_autoCQ.pending () && g_iptt==0 and ((m_bTxTime and (fTR < 0.75) and (msgLength>0)) or m_tune or m_mode=="JTTY")) {
       //### Allow late starts
       icw[0]=m_ncw;
       g_iptt = 1;
@@ -9174,6 +9201,9 @@ void MainWindow::guiUpdate()
     auto is_73 = message_is_73 (m_currentMessageType, msg_parts);
     m_sentFirst73 = is_73
       && !message_is_73 (m_lastMessageType, m_lastMessageSent.split (' ', SkipEmptyParts));
+    if (is_73 && !m_tune && m_QSOProgress != CALLING && autoCQAllowed ()) {
+      requestCQAfterQSO ();
+    }
     if (m_sentFirst73 || (is_73 && CALLING == m_QSOProgress)) {
       m_qsoStop=t2;
       if(m_config.id_after_73 ()) {
@@ -9193,7 +9223,7 @@ void MainWindow::guiUpdate()
 
     bool b=(m_mode.startsWith ("FT") or "Q65"==m_mode or "JT65"==m_mode or "JT9"==m_mode) and ui->cbAutoSeq->isVisible ()
         && ui->cbAutoSeq->isEnabled () && ui->cbAutoSeq->isChecked ();
-    if(is_73 and (m_config.disable_TX_on_73() or b)) {
+    if(is_73 && !m_autoCQ.pending () && (m_config.disable_TX_on_73() or b)) {
       m_nextCall="";  //### Temporary: disable use of "TU;" messages;
       if(m_nextCall!="") {
         useNextCall();
@@ -9940,6 +9970,7 @@ void MainWindow::stopTx2()
     m_ntr=0;
   }
   keep_last_tx_label = true;
+  m_autoCQ.transmissionEnded (QDateTime::currentMSecsSinceEpoch (), qRound64 (1000 * m_TRperiod));
   last_tx_label.setText(tr ("Last Tx: %1").arg (m_currentMessage.trimmed()));
 }
 
@@ -10298,6 +10329,10 @@ void MainWindow::processMessage (DecodedText const& message, Qt::KeyboardModifie
     if (m_fwdSeen.contains(key)) return;      // already drove the sequencer this period
     m_fwdSeen.insert(key);
   }
+  if (m_autoCQ.pending ()) {
+    if (!m_bDoubleClicked) return;
+    auto_tx_mode (false); // A deliberate new selection supersedes the queued CQ.
+  }
   // decode keyboard modifiers we are interested in
   auto shift = modifiers.testFlag (Qt::ShiftModifier);
   auto ctrl = modifiers.testFlag (Qt::ControlModifier);
@@ -10605,6 +10640,7 @@ void MainWindow::processMessage (DecodedText const& message, Qt::KeyboardModifie
               }
             else if (ROGERS == m_QSOProgress)
               {
+                if (autoCQAllowed ()) requestCQAfterQSO ();
                 if (m_config.prompt_to_log() || m_config.autoLog()) {
                   if (!((m_mode=="FT4" or m_mode=="FT2") && SpecOp::NA_VHF==m_specOp && m_config.NCCC_Sprint())) logQSOTimer.start(0);
                 }
@@ -10685,6 +10721,8 @@ void MainWindow::processMessage (DecodedText const& message, Qt::KeyboardModifie
     else if (5 == message_words.size ()
              && m_baseCall == message_words.at (1)) {
       // dual Fox style message, possibly from MSHV
+      // Queue CQ before logging can disable Auto Tx or clear the QSO partner.
+      if (autoCQAllowed ()) requestCQAfterQSO ();
       if (m_config.prompt_to_log() || m_config.autoLog()) {
         logQSOTimer.start(0);
       }
@@ -11225,6 +11263,7 @@ void MainWindow::TxAgain()
 
 void MainWindow::clearDX ()
 {
+  m_autoCQ.cancel ();
   set_dateTimeQSO (-1);
   if (m_QSOProgress != CALLING) {
     auto_tx_mode (false);
@@ -12037,8 +12076,56 @@ void MainWindow::on_genStdMsgsPushButton_clicked()          //genStdMsgs button
   }
 }
 
+bool MainWindow::autoCQAllowed () const
+{
+  return ui->cbAutoCQ->isChecked () && m_auto && !m_tune && !m_diskData
+    && !m_tx_watchdog && !rigFailed && (m_mode=="FT8" || m_mode=="FT4")
+    && m_config.special_op_id () == SpecOp::NONE
+    && ui->cbAutoSeq->isVisible () && ui->cbAutoSeq->isEnabled ()
+    && ui->cbAutoSeq->isChecked ();
+}
+
+void MainWindow::requestCQAfterQSO ()
+{
+  if (!autoCQAllowed () || m_autoCQ.pending () || m_hisCall.isEmpty ()) return;
+  m_autoCQCall = m_hisCall;
+  m_autoCQMode = m_mode;
+  m_autoCQFrequency = m_freqNominal;
+  m_autoCQ.request (QDateTime::currentMSecsSinceEpoch (), qRound64 (1000 * m_TRperiod),
+                    g_iptt != 0 || m_transmitting || ptt0Timer.isActive ());
+}
+
+void MainWindow::tryResumeCQ ()
+{
+  if (!m_autoCQ.pending ()) return;
+  if (!autoCQAllowed () || m_mode != m_autoCQMode || m_freqNominal != m_autoCQFrequency
+      || ui->dxCallEntry->text () != m_autoCQCall) {
+    auto_tx_mode (false);
+    return;
+  }
+  if (!m_autoCQ.ready (QDateTime::currentMSecsSinceEpoch (),
+                      g_iptt != 0 || m_transmitting || m_rigState.ptt () || ptt0Timer.isActive () || ptt1Timer.isActive (),
+                      logQSOTimer.isActive () || !m_logDlg->isHidden ())) return;
+
+  // Consume before clearDX(): it must not cancel this completed transition.
+  m_autoCQ.cancel ();
+  m_QSOProgress = CALLING;
+  clearDX ();
+  ui->dxGridEntry->clear ();
+  m_hisCall.clear ();
+  m_hisCall0.clear ();
+  m_hisGrid.clear ();
+  m_sentFirst73 = false;
+  m_bAutoReply = false;
+  selected = false;
+  setTxMsg (6);
+  m_bCallingCQ = true;
+  auto_tx_mode (true);
+}
+
 void MainWindow::cease_auto_Tx_after_QSO ()
 {
+  if (m_autoCQ.pending ()) return;
   if (m_config.repeat_Tx() && (m_mode=="MSK144" or m_mode=="Q65") && m_ntx == 4) return;
   if (SpecOp::FOX != m_specOp
       && ui->cbAutoSeq->isVisible () && ui->cbAutoSeq->isEnabled () && ui->cbAutoSeq->isChecked ())
@@ -12191,11 +12278,18 @@ void MainWindow::acceptQSO (QDateTime const& QSO_date_off, QString const& call, 
   // Log to eqsl.cc
   if (m_config.send_to_eqsl()) Eqsl->upload(m_config.eqsl_username(),m_config.eqsl_passwd(),m_config.eqsl_nickname(),call,mode,QSO_date_on,rpt_sent,m_config.bands ()->find (dial_freq),comments);
 
+  // A log dialog can outlive a manually cancelled Auto CQ transition.
+  bool const oldAutoCQLog = call == m_autoCQCall
+    && (call != ui->dxCallEntry->text () || mode != m_mode
+        || (m_dateTimeQSOOn.isValid () && QSO_date_on != m_dateTimeQSOOn));
   blocked=true;                                      // needed to clear DXgrid only optionally
-  if (m_config.clear_DXcall ()) clearDX ();
-  if (m_config.clear_DXgrid ()) ui->dxGridEntry->clear ();
+  // Auto CQ owns cleanup after RF has ended; keep the current message intact.
+  if (!m_autoCQ.pending () && !oldAutoCQLog) {
+    if (m_config.clear_DXcall ()) clearDX ();
+    if (m_config.clear_DXgrid ()) ui->dxGridEntry->clear ();
+  }
   QTimer::singleShot (50, [=] {blocked = false;});   // needed to clear DXgrid only optionally
-  m_dateTimeQSOOn = QDateTime {};
+  if (!oldAutoCQLog) m_dateTimeQSOOn = QDateTime {};
   if(m_specOp!=SpecOp::NONE and m_specOp!=SpecOp::FOX and m_specOp!=SpecOp::HOUND) {
     ui->sbSerialNumber->setValue(ui->sbSerialNumber->value() + 1);
   }
@@ -12223,9 +12317,11 @@ void MainWindow::acceptQSO (QDateTime const& QSO_date_off, QString const& call, 
     }
   }
 
-  m_xSent.clear ();
-  m_xRcvd.clear ();
-  if (m_config.set_RXtoTX ()) on_pbT2R_clicked();   // Mod for WD5DHK
+  if (!oldAutoCQLog) {
+    m_xSent.clear ();
+    m_xRcvd.clear ();
+    if (m_config.set_RXtoTX ()) on_pbT2R_clicked();
+  }   // Mod for WD5DHK
 }
 
 void MainWindow::updateRate()
@@ -13962,6 +14058,7 @@ void MainWindow::stopTuneATU()
 
 void MainWindow::on_stopTxButton_clicked()                    // Stop Tx
 {
+  m_autoCQ.cancel ();
   ui->pbBandHopping->setChecked(false); // disable band hopping
   if (m_tune) stop_tuning ();
   if (m_auto and !m_tuneup) auto_tx_mode (false);

@@ -30,6 +30,7 @@
 #include <QFileSystemWatcher>
 #include <QTextBlock>
 
+#include "AutoCQState.hpp"
 #include "MultiGeometryWidget.hpp"
 #include "NonInheritingProcess.hpp"
 #include "Audio/AudioDevice.hpp"
@@ -1119,6 +1120,13 @@ private:
   bool is77BitMode () const;
   QString getTransmittedSymbols() const;
   void cease_auto_Tx_after_QSO ();
+  bool autoCQAllowed () const;
+  void requestCQAfterQSO ();
+  void tryResumeCQ ();
+  AutoCQState m_autoCQ;
+  QString m_autoCQCall;
+  QString m_autoCQMode;
+  Frequency m_autoCQFrequency {0};
   Q_SLOT void ARRL_Digi_Display();
   void ARRL_Digi_Update(DecodedText dt);
   void activeWorked(QString call, QString band);

@@ -1546,6 +1546,16 @@ When not checked you can view the calibration results.</string>
                      </widget>
                     </item>
                     <item>
+                     <widget class="QCheckBox" name="cbAutoCQ">
+                      <property name="toolTip">
+                       <string>Resume CQ after a completed QSO in normal FT8 or FT4 operation. Enables Auto Seq and CQ: First. Start transmitting with Enable Tx.</string>
+                      </property>
+                      <property name="text">
+                       <string>Auto CQ</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
                      <widget class="QComboBox" name="respondComboBox">
                       <property name="toolTip">
                        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Select &lt;span style=&quot; font-weight:600;&quot;&gt;CQ: None&lt;/span&gt; to choose callers manually.&lt;/p&gt;&lt;p&gt;Select &lt;span style=&quot; font-weight:600;&quot;&gt;CQ: First&lt;/span&gt; to respond automatically to the first decoded reply to your CQ. &lt;/p&gt;&lt;p&gt;Select &lt;span style=&quot; font-weight:600;&quot;&gt;CQ: Max Dist&lt;/span&gt; to respond automatically to the reply yielding most points in the ARRL International Digital Contest, or in general to the most distant station, if its message has a valid grid.&lt;/p&gt;&lt;p&gt;Select &lt;span style=&quot; font-weight:600;&quot;&gt;CQ: Max dB&lt;/span&gt; to respond automatically to the the strongest station's reply to your CQ. &lt;/p&gt;&lt;p&gt;Select &lt;span style=&quot; font-weight:600;&quot;&gt;CQ: Min dB&lt;/span&gt; to respond automatically to the the weakest station's reply to your CQ. &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
