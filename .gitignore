@@ -22,3 +22,16 @@ CMakeFiles
 fnd
 lib/77bit/tmp
 lib/tmp
+
+# Local build output and operating data
+/build/
+/build-*/
+CMakeCache.txt
+Testing/
+*.o.d
+*.log
+*.adi
+*.adif
+*.wav
+*.core
+/core
