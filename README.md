@@ -11,7 +11,7 @@ Dieses Repository dokumentiert eine angepasste Version und ist kein offizielles 
 
 ## Änderungen gegenüber dem lokalen Basisarchiv
 
-- Der Fenstertitel kennzeichnet diese Ausgabe mit **DL6LE-Version**.
+- Der Fenstertitel kennzeichnet diese Ausgabe mit **DL6LE-Version (Basis: WS 3.2.1 / 260926)**.
 
 - Auto CQ für normalen FT8-/FT4-Betrieb: Rückkehr zu CQ nach Abschluss eines QSOs.
   Über das Häkchen **Auto CQ** abschaltbar; standardmäßig aus.

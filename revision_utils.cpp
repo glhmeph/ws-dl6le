@@ -103,7 +103,7 @@ QString program_display_name ()
 QString program_title (QString const& revision)
 {
   QString id {program_display_name () + "   v" + QCoreApplication::applicationVersion ()};
-  return id + " " + revision + " Digital Mode Suite - DL6LE-Version";
+  return id + " " + revision + " Digital Mode Suite - DL6LE-Version (Basis: WS 3.2.1 / 260926)";
 }
 
 QString http_user_agent ()
