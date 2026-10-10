@@ -1907,26 +1907,32 @@ install (TARGETS ft8code jt65code jt9code jt4code msk144code
   )
 endif(WSJT_BUILD_UTILS)  
 
-install (PROGRAMS
-  ${RIGCTL_EXE}
-  DESTINATION ${CMAKE_INSTALL_BINDIR}
-  #COMPONENT runtime
-  RENAME rigctl-ws${CMAKE_EXECUTABLE_SUFFIX}
-  )
+if (RIGCTL_EXE)
+  install (PROGRAMS
+    ${RIGCTL_EXE}
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    #COMPONENT runtime
+    RENAME rigctl-ws${CMAKE_EXECUTABLE_SUFFIX}
+    )
+endif ()
 
-install (PROGRAMS
-  ${RIGCTLD_EXE}
-  DESTINATION ${CMAKE_INSTALL_BINDIR}
-  #COMPONENT runtime
-  RENAME rigctld-ws${CMAKE_EXECUTABLE_SUFFIX}
-  )
+if (RIGCTLD_EXE)
+  install (PROGRAMS
+    ${RIGCTLD_EXE}
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    #COMPONENT runtime
+    RENAME rigctld-ws${CMAKE_EXECUTABLE_SUFFIX}
+    )
+endif ()
 
-install (PROGRAMS
-  ${RIGCTLCOM_EXE}
-  DESTINATION ${CMAKE_INSTALL_BINDIR}
-  #COMPONENT runtime
-  RENAME rigctlcom-ws${CMAKE_EXECUTABLE_SUFFIX}
-  )
+if (RIGCTLCOM_EXE)
+  install (PROGRAMS
+    ${RIGCTLCOM_EXE}
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    #COMPONENT runtime
+    RENAME rigctlcom-ws${CMAKE_EXECUTABLE_SUFFIX}
+    )
+endif ()
 
 if (NOT WIN32)
 install (FILES

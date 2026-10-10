@@ -67,3 +67,33 @@ sowie Tags werden hochgeladen. Build-Ausgaben und persönliche Betriebsdaten
 bleiben außerhalb der Versionsverwaltung.
 
 Commit-Autor: Rene Morgenstern. Die Git-Identität ist nur für dieses lokale Repository konfiguriert.
+
+## Debian-Paket
+
+Die Vorabversion `v3.2.1-dl6le.1` wird als `.deb` für amd64 bereitgestellt.
+Gebaut unter Linux Mint 22.3 mit Bibliotheken der Ubuntu-24.04-Paketbasis.
+Andere Distributionen sind nicht getestet; die Paketabhängigkeiten müssen
+auf dem Zielsystem verfügbar sein.
+
+Installation des heruntergeladenen Pakets:
+
+```bash
+sudo apt install ./ws-dl6le_3.2.1+dl6le.1_amd64.deb
+```
+
+Start anschließend über den Menüeintrag WS oder mit `ws` im Terminal.
+Das Paket installiert auch WS-MAP (`wsmap`) und EME65 (`eme65`).
+Es kann wegen gemeinsam verwendeter Programmpfade nicht gleichzeitig mit
+den Paketen `ws` oder `wsjtx` installiert sein. Prüfe den von apt angezeigten
+Installationsplan vor der Bestätigung.
+
+Erstellung aus einem fertig gebauten Quellstand:
+
+```bash
+WS_DL6LE_BUILD_DIR="$PWD/build" cpack -G DEB --config packaging/DL6LECPackConfig.cmake -B release-assets
+```
+
+Die Hamlib-Hilfsprogramme `rigctl`, `rigctld` und `rigctlcom` werden nur dann
+mitgeliefert, wenn sie auf dem Build-System gefunden wurden. Sie sind in diesem
+ersten Paket nicht enthalten. Die CAT-Steuerung über die Hamlib-Bibliothek
+bleibt enthalten.

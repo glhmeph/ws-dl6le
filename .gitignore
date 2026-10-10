@@ -35,3 +35,5 @@ Testing/
 *.wav
 *.core
 /core
+
+/release-assets/
