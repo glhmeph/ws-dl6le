@@ -63,3 +63,14 @@ FIFO unit-test boundary.
   state changes. Before adding a Run F11 call-stacking macro, capture its
   TXTEXT ordering and verify that the leading tag, callsign, and exchange all
   refer to the intended queued station.
+
+## DL6LE macro preview
+
+- In JTTY, open **Makrovorschau** and check all eight function-key rows.
+- Set My Call to TK/DL6LE: F1 must show CQ TK/DL6LE CQ; F4 must show TK/DL6LE.
+- Edit a macro while the preview remains open and verify it updates automatically.
+- Change the DX call and serial number and verify F2/F3/F6 update.
+- With an empty or invalid DX call, dependent native macros must show a rejection reason.
+- Check Field Day, RTTY, grid macros and customized literal macros.
+- Open and close the preview repeatedly and verify only one preview window is open.
+- Previewing must not enable TX, change the draft, consume a serial number or queue audio.

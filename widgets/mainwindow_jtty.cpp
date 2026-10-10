@@ -12,6 +12,11 @@
 #include "fastgraph.h"
 #include "Audio/soundout.h"
 #include "Detector/Detector.hpp"
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QHeaderView>
+#include <QTableWidget>
+#include <QVBoxLayout>
 #include <QSettings>
 #include <QtConcurrent/QtConcurrentRun>
 #include <functional>
@@ -889,6 +894,101 @@ bool MainWindow::jtty_key_struck(QKeyEvent * e)
   return sendJttyFunctionKey(functionKey);
 }
 
+void MainWindow::showJttyMacroPreview()
+{
+  if (m_jttyMacroPreview) {
+    m_jttyMacroPreview->show();
+    m_jttyMacroPreview->raise();
+    m_jttyMacroPreview->activateWindow();
+    return;
+  }
+
+  auto *dialog = new QDialog(this);
+  m_jttyMacroPreview = dialog;
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->setWindowTitle(tr("JTTY – Makrovorschau"));
+  dialog->resize(800, 400);
+  auto *layout = new QVBoxLayout(dialog);
+  auto *hint = new QLabel(tr("Aktuelle Sendetexte für F1–F8. Die Vorschau wird automatisch aktualisiert."), dialog);
+  hint->setWordWrap(true);
+  layout->addWidget(hint);
+  auto *table = new QTableWidget(8, 3, dialog);
+  table->setHorizontalHeaderLabels({tr("Taste"), tr("Makro"), tr("Sendetext / Hinweis")});
+  table->verticalHeader()->hide();
+  table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  table->setWordWrap(true);
+  table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+  table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+  table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+  for (int row = 0; row < 8; ++row) {
+    table->setItem(row, 0, new QTableWidgetItem(QStringLiteral("F%1").arg(row + 1)));
+    table->setItem(row, 1, new QTableWidgetItem);
+    table->setItem(row, 2, new QTableWidgetItem);
+  }
+  layout->addWidget(table);
+  auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+  connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+  layout->addWidget(buttons);
+
+  auto refresh = [this, table, previous = QStringList {}]() mutable {
+    auto const context = jttyNativeMacroContext(m_config, m_hisCall, ui->sbSerialNumber_2->value());
+    std::array<QLineEdit *, 8> const editors {{ui->msg1, ui->msg2, ui->msg3, ui->msg4,
+                                            ui->msg5, ui->msg6, ui->msg7, ui->msg8}};
+    QStringList state {context.myCall, context.hisCall, QString::number(context.serialNumber),
+      context.grid, context.configuredExchange, QString::number(static_cast<int>(context.exchangeProfile)),
+      QString::number(ui->cbLowerCase->isChecked()), QString::number(m_jttyTxActive)};
+    for (auto *editor : editors) state.append(editor->text());
+    if (state == previous) return;
+    previous = state;
+
+    for (int row = 0; row < 8; ++row) {
+      QString const macro = editors[row]->text();
+      table->item(row, 1)->setText(macro);
+      QString text;
+      QString error;
+      QString warning;
+      if (macro.simplified().isEmpty()) {
+        error = tr("Makro ist leer.");
+      } else {
+        auto const compiled = Jtty::compileNativeMacro(macro, context);
+        if (compiled.status == Jtty::NativeMacroStatus::InvalidRuntime) {
+          error = compiled.error;
+        } else {
+          int tones[944];
+          int symbols = 0;
+          text = compiled.text;
+          if (compiled.isNative()) {
+            int status = static_cast<int>(Jtty::NativeEncodeStatus::InvalidDescriptor);
+            genjtty_atoms_c(compiled.atoms.constData(), compiled.atoms.size(), tones, &symbols, &status);
+            if (symbols <= 0) error = jttyNativeEncodeError(status);
+          } else {
+            if (ui->cbLowerCase->isChecked()) text = text.toLower();
+            auto const prepared = Jtty::prepareTransmitText(text);
+            if (prepared.changed()) warning = tr("Text wurde angepasst oder auf 80 Zeichen gekürzt.");
+            auto frame = Jtty::transmitFrame(prepared.text, m_jttyTxActive).toLatin1();
+            int const profile = static_cast<int>(context.exchangeProfile);
+            genjtty_profile_(frame.data(), &profile, tones, &symbols, (FCL)80);
+            text = QString::fromLatin1(frame).trimmed();
+            if (symbols <= 0) error = tr("Dieser Sendetext kann nicht codiert werden.");
+          }
+        }
+      }
+      auto *item = table->item(row, 2);
+      item->setText(error.isEmpty() ? text + (warning.isEmpty() ? QString {} : "\n" + warning)
+                                   : tr("Nicht sendbar: %1").arg(error));
+      item->setForeground(error.isEmpty() ? table->palette().brush(QPalette::Text)
+                                          : QBrush(QColor(Qt::red)));
+      item->setToolTip(item->text());
+    }
+    table->resizeRowsToContents();
+  };
+  refresh();
+  auto *timer = new QTimer(dialog);
+  connect(timer, &QTimer::timeout, dialog, refresh);
+  timer->start(300);
+  dialog->show();
+}
+
 bool MainWindow::sendJttyFunctionKey(int index)
 {
   QString macro;
@@ -1157,6 +1257,7 @@ MMTTYIF *MainWindow::getMmttyIf() const {
 
 void MainWindow::setupJtty()
 {
+  connect(ui->pbJttyMacroPreview, &QPushButton::clicked, this, &MainWindow::showJttyMacroPreview);
   qRegisterMetaType<TxAudioQueueEpoch> ("TxAudioQueueEpoch");
   qRegisterMetaType<TxAudioQueueProgress> ("TxAudioQueueProgress");
   qRegisterMetaType<TxAudioQueueDrainState> ("TxAudioQueueDrainState");

@@ -11,6 +11,10 @@ Dieses Repository dokumentiert eine angepasste Version und ist kein offizielles 
 
 ## Änderungen gegenüber dem lokalen Basisarchiv
 
+- **JTTY-Makrovorschau:** Eine automatisch aktualisierte Übersicht für F1–F8
+  zeigt eingesetzte Rufzeichen, Austauschdaten und nicht sendbare Makros.
+  Öffnen über **Makrovorschau** im JTTY-Bereich.
+
 - Der Fenstertitel kennzeichnet diese Ausgabe mit **DL6LE-Version (Basis: WS 3.2.1 / 260926)**.
 
 - Auto CQ für normalen FT8-/FT4-Betrieb: Rückkehr zu CQ nach Abschluss eines QSOs.
@@ -70,7 +74,7 @@ Commit-Autor: Rene Morgenstern. Die Git-Identität ist nur für dieses lokale Re
 
 ## Debian-Paket
 
-Die Vorabversion `v3.2.1-dl6le.1` wird als `.deb` für amd64 bereitgestellt.
+Die Vorabversion `v3.2.1-dl6le.2` wird als `.deb` für amd64 bereitgestellt.
 Gebaut unter Linux Mint 22.3 mit Bibliotheken der Ubuntu-24.04-Paketbasis.
 Andere Distributionen sind nicht getestet; die Paketabhängigkeiten müssen
 auf dem Zielsystem verfügbar sein.
@@ -78,7 +82,7 @@ auf dem Zielsystem verfügbar sein.
 Installation des heruntergeladenen Pakets:
 
 ```bash
-sudo apt install ./ws-dl6le_3.2.1+dl6le.1_amd64.deb
+sudo apt install ./ws-dl6le_3.2.1+dl6le.2_amd64.deb
 ```
 
 Start anschließend über den Menüeintrag WS oder mit `ws` im Terminal.

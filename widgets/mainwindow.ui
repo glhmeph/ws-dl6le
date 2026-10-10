@@ -3673,6 +3673,16 @@ Double-click to reset to the standard 73 message</string>
                 </spacer>
                </item>
                <item>
+                <widget class="QPushButton" name="pbJttyMacroPreview">
+                 <property name="text">
+                  <string>Makrovorschau</string>
+                 </property>
+                 <property name="toolTip">
+                  <string>Zeigt die aktuellen JTTY-Makros mit eingesetzten Rufzeichen und Austauschdaten an.</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
                 <widget class="QCheckBox" name="cbIncludeTime">
                  <property name="toolTip">
                   <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Show the UTC start time of each decoded message.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>

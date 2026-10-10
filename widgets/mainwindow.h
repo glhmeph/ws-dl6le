@@ -1238,6 +1238,8 @@ private:
   void jtty_save_wav();
   bool jtty_key_struck(QKeyEvent * e);
   bool sendJttyFunctionKey(int index);
+  void showJttyMacroPreview();
+  QPointer<QDialog> m_jttyMacroPreview;
   bool jtty_decode(int k, int istart0 = -1, int istop = -1);
   void renderJttyAllFreqLines();
   void renderJttyQsoLines();
