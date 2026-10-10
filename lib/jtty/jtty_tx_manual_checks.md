@@ -74,3 +74,5 @@ FIFO unit-test boundary.
 - Check Field Day, RTTY, grid macros and customized literal macros.
 - Open and close the preview repeatedly and verify only one preview window is open.
 - Previewing must not enable TX, change the draft, consume a serial number or queue audio.
+
+- Hover over F1-F8 and verify each tooltip uses current call/exchange values and shows invalid data without starting TX.

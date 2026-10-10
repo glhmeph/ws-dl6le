@@ -12,6 +12,7 @@
 #include "fastgraph.h"
 #include "Audio/soundout.h"
 #include "Detector/Detector.hpp"
+#include <QEvent>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QHeaderView>
@@ -115,6 +116,81 @@ extern "C" {
 
   void gen_jttywave_(int itone[], int* nsym, int* nsps, float* bt, float* fsample, float* f0,
                     float xjunk[], float wave[], int* icmplx, int* nwave);
+}
+
+namespace
+{
+  struct JttyMacroPreviewResult
+  {
+    QString text;
+    QString error;
+    QString warning;
+
+    QString displayText() const
+    {
+      return error.isEmpty() ? text + (warning.isEmpty() ? QString {} : "\n" + warning)
+                             : QObject::tr("Nicht sendbar: %1").arg(error);
+    }
+  };
+
+  JttyMacroPreviewResult jttyMacroPreview(QString const& macro,
+      Jtty::NativeMacroContext const& context, bool lowerCase, bool chained)
+  {
+    QString text;
+    QString error;
+    QString warning;
+    if (macro.simplified().isEmpty()) {
+      error = QObject::tr("Makro ist leer.");
+    } else {
+      auto const compiled = Jtty::compileNativeMacro(macro, context);
+      if (compiled.status == Jtty::NativeMacroStatus::InvalidRuntime) {
+        error = compiled.error;
+      } else {
+        int tones[944];
+        int symbols = 0;
+        text = compiled.text;
+        if (compiled.isNative()) {
+          int status = static_cast<int>(Jtty::NativeEncodeStatus::InvalidDescriptor);
+          genjtty_atoms_c(compiled.atoms.constData(), compiled.atoms.size(), tones, &symbols, &status);
+          if (symbols <= 0) error = jttyNativeEncodeError(status);
+        } else {
+          if (lowerCase) text = text.toLower();
+          auto const prepared = Jtty::prepareTransmitText(text);
+          if (prepared.changed()) warning = QObject::tr("Text wurde angepasst oder auf 80 Zeichen gekürzt.");
+          auto frame = Jtty::transmitFrame(prepared.text, chained).toLatin1();
+          int const profile = static_cast<int>(context.exchangeProfile);
+          genjtty_profile_(frame.data(), &profile, tones, &symbols, (FCL)80);
+          text = QString::fromLatin1(frame).trimmed();
+          if (symbols <= 0) error = QObject::tr("Dieser Sendetext kann nicht codiert werden.");
+        }
+      }
+    }
+    return {text, error, warning};
+  }
+
+  class JttyMacroTooltipFilter final : public QObject
+  {
+  public:
+    JttyMacroTooltipFilter(QWidget *widget, std::function<QString()> preview)
+      : QObject(widget), widget_(widget), preview_(std::move(preview))
+    {
+      widget_->setToolTip(QObject::tr("Makrovorschau"));
+      widget_->installEventFilter(this);
+    }
+
+  protected:
+    bool eventFilter(QObject *object, QEvent *event) override
+    {
+      if (object == widget_ && event->type() == QEvent::ToolTip) {
+        widget_->setToolTip(preview_());
+      }
+      return QObject::eventFilter(object, event);
+    }
+
+  private:
+    QWidget *widget_;
+    std::function<QString()> preview_;
+  };
 }
 
 #ifdef WIN32
@@ -944,39 +1020,10 @@ void MainWindow::showJttyMacroPreview()
     for (int row = 0; row < 8; ++row) {
       QString const macro = editors[row]->text();
       table->item(row, 1)->setText(macro);
-      QString text;
-      QString error;
-      QString warning;
-      if (macro.simplified().isEmpty()) {
-        error = tr("Makro ist leer.");
-      } else {
-        auto const compiled = Jtty::compileNativeMacro(macro, context);
-        if (compiled.status == Jtty::NativeMacroStatus::InvalidRuntime) {
-          error = compiled.error;
-        } else {
-          int tones[944];
-          int symbols = 0;
-          text = compiled.text;
-          if (compiled.isNative()) {
-            int status = static_cast<int>(Jtty::NativeEncodeStatus::InvalidDescriptor);
-            genjtty_atoms_c(compiled.atoms.constData(), compiled.atoms.size(), tones, &symbols, &status);
-            if (symbols <= 0) error = jttyNativeEncodeError(status);
-          } else {
-            if (ui->cbLowerCase->isChecked()) text = text.toLower();
-            auto const prepared = Jtty::prepareTransmitText(text);
-            if (prepared.changed()) warning = tr("Text wurde angepasst oder auf 80 Zeichen gekürzt.");
-            auto frame = Jtty::transmitFrame(prepared.text, m_jttyTxActive).toLatin1();
-            int const profile = static_cast<int>(context.exchangeProfile);
-            genjtty_profile_(frame.data(), &profile, tones, &symbols, (FCL)80);
-            text = QString::fromLatin1(frame).trimmed();
-            if (symbols <= 0) error = tr("Dieser Sendetext kann nicht codiert werden.");
-          }
-        }
-      }
+      auto const preview = jttyMacroPreview(macro, context, ui->cbLowerCase->isChecked(), m_jttyTxActive);
       auto *item = table->item(row, 2);
-      item->setText(error.isEmpty() ? text + (warning.isEmpty() ? QString {} : "\n" + warning)
-                                   : tr("Nicht sendbar: %1").arg(error));
-      item->setForeground(error.isEmpty() ? table->palette().brush(QPalette::Text)
+      item->setText(preview.displayText());
+      item->setForeground(preview.error.isEmpty() ? table->palette().brush(QPalette::Text)
                                           : QBrush(QColor(Qt::red)));
       item->setToolTip(item->text());
     }
@@ -1258,6 +1305,18 @@ MMTTYIF *MainWindow::getMmttyIf() const {
 void MainWindow::setupJtty()
 {
   connect(ui->pbJttyMacroPreview, &QPushButton::clicked, this, &MainWindow::showJttyMacroPreview);
+  std::array<QPushButton *, 8> const buttons {{ui->pbF1, ui->pbF2, ui->pbF3, ui->pbF4,
+                                             ui->pbF5, ui->pbF6, ui->pbF7, ui->pbF8}};
+  std::array<QLineEdit *, 8> const editors {{ui->msg1, ui->msg2, ui->msg3, ui->msg4,
+                                          ui->msg5, ui->msg6, ui->msg7, ui->msg8}};
+  for (int i = 0; i < 8; ++i) {
+    new JttyMacroTooltipFilter(buttons[i], [this, editor = editors[i], i] {
+      auto const context = jttyNativeMacroContext(m_config, m_hisCall, ui->sbSerialNumber_2->value());
+      auto const preview = jttyMacroPreview(editor->text(), context, ui->cbLowerCase->isChecked(), m_jttyTxActive);
+      return QStringLiteral("<b>F%1</b><br>%2").arg(i + 1).arg(
+        preview.displayText().toHtmlEscaped().replace(QLatin1Char {'\n'}, QStringLiteral("<br>")));
+    });
+  }
   qRegisterMetaType<TxAudioQueueEpoch> ("TxAudioQueueEpoch");
   qRegisterMetaType<TxAudioQueueProgress> ("TxAudioQueueProgress");
   qRegisterMetaType<TxAudioQueueDrainState> ("TxAudioQueueDrainState");
