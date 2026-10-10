@@ -11,6 +11,8 @@ Dieses Repository dokumentiert eine angepasste Version und ist kein offizielles 
 
 ## Änderungen gegenüber dem lokalen Basisarchiv
 
+- Der Fenstertitel kennzeichnet diese Ausgabe mit **DL6LE-Version**.
+
 - Auto CQ für normalen FT8-/FT4-Betrieb: Rückkehr zu CQ nach Abschluss eines QSOs.
   Über das Häkchen **Auto CQ** abschaltbar; standardmäßig aus.
   Details und manuelle Prüfungen: `doc/development/auto-cq.md`.
